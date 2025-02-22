@@ -334,7 +334,10 @@ const getImage = (req, res) => {
   });
 };
 
-const stripeSecretKey = 'sk_test_51OoUs7FqxkzohgjWl2yAACvBZxlVBzJ6nAKlej40iICe6SxYTVX2dvErN4den9sJWYc02UB3FEiZ7EY0CfpKQY7A00tAQfS7ch'
+const dotenv = require('dotenv')
+dotenv.config({ path: './.env' });
+
+const stripeSecretKey = process.env.stripe
 const stripe = require('stripe')(stripeSecretKey)
 
 const createCheckoutSession = async (req, res) => {
