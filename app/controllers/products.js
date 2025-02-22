@@ -4,12 +4,24 @@ const path = require('path');
 const crypto = require('crypto');
 // 1) Definir el algoritmo, clave e IV
 const algorithm = 'aes-256-cbc';
-
+const cloudinary = require('cloudinary').v2;
 // Deben ser EXACTAMENTE 32 bytes (key) y 16 bytes (iv).
 // Aquí sólo es un ejemplo; en prod, usa variables de entorno (process.env.KEY, etc.).
 const secretKey = '12345678901234567890123456789012'; 
 // 16 caracteres ASCII para el IV
 const ivString  = '1234567890123456';
+
+const dotenv = require('dotenv')
+dotenv.config({ path: './.env' });
+
+const stripeSecretKey = process.env.stripe
+const stripe = require('stripe')(stripeSecretKey)
+
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.APIKEY,
+  api_secret: process.env.APISECRET
+});
 
 /**
  * Cifra un texto plano (p.e. nombre del archivo) con AES-256-CBC
@@ -93,39 +105,9 @@ const addColumn = async (req, res) => {
 const addProduct = async (req, res) => {
   let product = req.body;
 
-  if (req.file && req.file.filename) {
-    // 1) Generamos el nombre cifrado
-    const encryptedCode = encryptAES(req.file.filename);
-
-    // 2) Ruta vieja (el archivo recién subido por multer)
-    const oldPath = path.join(__dirname, '../uploads', req.file.filename);
-
-    // 3) Obtenemos extensión si quieres conservarla (ej: .jpg, .png, etc.)
-    const extension = path.extname(req.file.filename); // .jpg, .png, etc.
-
-    // 4) Definimos el nuevo nombre, concatenando la extensión
-    const newFileName = encryptedCode + extension;
-
-    // 5) Construimos la ruta nueva
-    const newPath = path.join(__dirname, '../uploads', newFileName);
-
-    // 6) Renombramos el archivo físicamente
-    try {
-      fs.renameSync(oldPath, newPath);
-    } catch (err) {
-      console.error('Error al renombrar el archivo:', err);
-      return res.status(500).json({
-        isAdded: false,
-        message: 'Error al renombrar el archivo en el servidor',
-        error: err
-      });
-    }
-
-    // 7) Guardamos en la BD el nombre nuevo (newFileName)
-    //    Suponiendo que tu columna se llama imageUrl
-    product.imageUrl = newFileName;
-  } else {
-    product.imageUrl = null;
+  if (req.file) {
+    const result = await cloudinary.uploader.upload(req.file.path, { folder: 'products' });
+    product.imageUrl = result.secure_url;
   }
 
   // Si se envió accidentalmente un id, se elimina
@@ -177,7 +159,6 @@ const addProduct = async (req, res) => {
     });
   });
 };
-
 
 const editProduct = async (req, res) => {
     const { column, value, id } = req.body;
@@ -333,12 +314,6 @@ const getImage = (req, res) => {
     return res.download(filePath); // fuerza descarga, por ejemplo
   });
 };
-
-const dotenv = require('dotenv')
-dotenv.config({ path: './.env' });
-
-const stripeSecretKey = process.env.stripe
-const stripe = require('stripe')(stripeSecretKey)
 
 const createCheckoutSession = async (req, res) => {
   console.log(req.body)
