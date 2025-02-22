@@ -5,47 +5,57 @@ const pool = require('../config/mysql');
 
 
 const register = async (req, res) => {
-    const { firstName, middleName, lastName, password, authCode, rol, email } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    pool.getConnection((err, connection) => {
-        if (err) console.log(err)
+  const { firstName, middleName, lastName, password, authCode, rol, email } = req.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  pool.getConnection((err, connection) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ isRegistered: false, message: 'Error al conectar con la base de datos', error: err });
+    }
 
-        connection.beginTransaction(err => {
-        if (err) {
-            connection.release();
-            console.log(err)
-        }
+    connection.beginTransaction(err => {
+      if (err) {
+        connection.release();
+        console.error(err);
+        return res.status(500).json({ isRegistered: false, message: 'Error al iniciar la transacción', error: err });
+      }
 
-        connection.query('INSERT INTO users ( firstName, middleName, lastName, password, authCode, authenticated, rol, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [firstName, middleName, lastName, hashedPassword, authCode, false, rol, email], (err, result) => {
-                if (err) {
-                connection.rollback(() => {
-                    connection.release();
-                    console.log(err)
-                });
-                } else {
-                connection.commit(err => {
-                        if (err) {
-                        connection.rollback(() => {
-                            connection.release();
-                            res.status(200).send({isRegistered:false});
-                        });
-                        } else {
-                        connection.release();
-                        res.status(200).send({isRegistered:true});
-                        }
-                    }); 
-                }
+      connection.query(
+        'INSERT INTO Users ( firstName, middleName, lastName, password, authCode, authenticated, rol, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
+        [firstName, middleName, lastName, hashedPassword, authCode, false, rol, email],
+        (err, result) => {
+          if (err) {
+            connection.rollback(() => {
+              connection.release();
+              console.error(err);
+              return res.status(500).json({ isRegistered: false, message: 'Error al insertar el usuario', error: err });
             });
-        });
+          } else {
+            connection.commit(err => {
+              if (err) {
+                connection.rollback(() => {
+                  connection.release();
+                  console.error(err);
+                  return res.status(500).json({ isRegistered: false, message: 'Error al confirmar la transacción', error: err });
+                });
+              } else {
+                connection.release();
+                return res.status(200).json({ isRegistered: true });
+              }
+            });
+          }
+        }
+      );
     });
-}
+  });
+};
+
 
 const login = async (req, res) => {
-  console.log(req.body)
     const { email, password } = req.body;
     pool.getConnection((err, connection) => {
         if (err) return res.status(500).send(err);
-        connection.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
+        connection.query('SELECT * FROM Users WHERE email = ?', [email], async (err, results) => {
         connection.release();
         if (err) return res.status(500).send(err);
         if (!results.length || !(await bcrypt.compare(password, results[0].password))) {
@@ -73,7 +83,7 @@ const isAuthenticated = async(req, res) => {
     }
 
     connection.query(
-      'SELECT authenticated FROM users WHERE email = ?',
+      'SELECT authenticated FROM Users WHERE email = ?',
       [email],
       (err, results) => {
         connection.release();
@@ -110,7 +120,7 @@ const authenticateUser = async (req, res) => {
     pool.getConnection((err, connection) => {
       if (err) return res.status(500).send('Error al conectar con la base de datos');
   
-      connection.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
+      connection.query('SELECT * FROM Users WHERE email = ?', [email], (err, results) => {
         if (err) {
           connection.release();
           return res.status(500).send('Error en la consulta');
@@ -126,7 +136,7 @@ const authenticateUser = async (req, res) => {
         if (authCode === results[0].authCode) {
           // Actualizar el valor de authCode a TRUE
           connection.query(
-            'UPDATE users SET authenticated = TRUE WHERE email = ?',
+            'UPDATE Users SET authenticated = TRUE WHERE email = ?',
             [email],
             (err) => {
               connection.release();
@@ -146,26 +156,25 @@ const authenticateUser = async (req, res) => {
 
 const getUsersAdmin = async (req, res) => {
     const root = "root"
-    const query = 'SELECT * FROM users where rol != ?'; // Consulta para obtener todos los usuarios
+    const query = 'SELECT * FROM Users where rol != ?'; // Consulta para obtener todos los usuarios
   
-    pool.query(query, root,(err, users) => {
+    pool.query(query, root,(err, Users) => {
       if (err) {
         console.error('Error al recuperar los usuarios de la base de datos:', err);
         return res.status(500).send('Error al obtener los usuarios');
       }
   
-      if (users.length === 0) {
+      if (Users.length === 0) {
         return res.status(404).send('No se encontraron usuarios');
       }
   
       // Enviar los datos de los usuarios como respuesta en formato JSON
-      res.json(users);
+      res.json(Users);
     });
 }
 
 const editUserAdmin = async (req, res) => {
     const { email, rol } = req.body;
-    console.log(email,rol)
     // Verificar que los datos están presentes
     if (!email || !rol) {
       return res.status(400).send('Faltan datos obligatorios');
@@ -175,7 +184,7 @@ const editUserAdmin = async (req, res) => {
       if (err) return res.status(500).send('Error al conectar con la base de datos');
   
       // Verificar si el usuario existe en la base de datos
-      connection.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
+      connection.query('SELECT * FROM Users WHERE email = ?', [email], (err, results) => {
         if (err) {
           connection.release();
           return res.status(500).send('Error en la consulta');
@@ -188,7 +197,7 @@ const editUserAdmin = async (req, res) => {
   
         // Actualizar todos los valores en la base de datos
         const updateQuery = `
-          UPDATE users 
+          UPDATE Users 
           SET email = ?, rol = ?
           WHERE email = ?
         `;
@@ -207,7 +216,7 @@ const editUserAdmin = async (req, res) => {
  
 const deleteAdmin = async (req, res) => {
   const { id } = req.body;
-  const query = `DELETE FROM users WHERE id = ?`;
+  const query = `DELETE FROM Users WHERE id = ?`;
 
   pool.query(query, [id], (err, result) => {
     if (err) {

@@ -7,7 +7,9 @@ const dbConfig = {
     user: process.env.user,
     password: process.env.password,
     database: process.env.database,
-    connectionLimit: 10,
+    connectionLimit: 50,
+    connectTimeout: 20000  // Tiempo de espera aumentado a 20 segundos
+
   };
   
   const pool = mysql.createPool(dbConfig);
