@@ -1,12 +1,16 @@
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const util = require('util');
+
+const hashAsync = util.promisify(bcrypt.hash);
+const compareAsync = util.promisify(bcrypt.compare);
 
 const pool = require('../config/mysql');
 
-
 const register = async (req, res) => {
   const { firstName, middleName, lastName, password, authCode, rol, email } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
+  // Usar hashAsync en lugar de bcrypt.hash
+  const hashedPassword = await hashAsync(password, 10);
   pool.getConnection((err, connection) => {
     if (err) {
       console.error(err);
@@ -50,7 +54,6 @@ const register = async (req, res) => {
   });
 };
 
-
 const login = async (req, res) => {
     const { email, password } = req.body;
     pool.getConnection((err, connection) => {
@@ -58,7 +61,8 @@ const login = async (req, res) => {
         connection.query('SELECT * FROM Users WHERE email = ?', [email], async (err, results) => {
         connection.release();
         if (err) return res.status(500).send(err);
-        if (!results.length || !(await bcrypt.compare(password, results[0].password))) {
+        // Usar compareAsync en lugar de bcrypt.compare
+        if (!results.length || !(await compareAsync(password, results[0].password))) {
             return res.status(401).send('Nombre de usuario o contraseña incorrecta');
         }
         const token = jwt.sign({ id: results[0].id, role: results[0].rol }, 'secretkey', { expiresIn: '74h' });
@@ -222,10 +226,10 @@ const deleteAdmin = async (req, res) => {
     if (err) {
       console.error('Error borrando usuario:', err);
       return res.status(500).send('Error borrando usuario');
-    }else{
+    } else {
       res.status(200).send('Usuario eliminado');
     }
   });
 }
 
-module.exports = { register, login, isAuthenticated, authenticateUser, getUsersAdmin, editUserAdmin, deleteAdmin}
+module.exports = { register, login, isAuthenticated, authenticateUser, getUsersAdmin, editUserAdmin, deleteAdmin };
